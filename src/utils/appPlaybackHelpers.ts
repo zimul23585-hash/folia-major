@@ -4,6 +4,7 @@ import type { StructuredLyric } from '../types/navidrome';
 import { detectTimedLyricFormat } from './lyrics/formatDetection';
 import { getLineRenderHints } from './lyrics/renderHints';
 import { isLocalPlaybackSong, isNavidromePlaybackSong, isStagePlaybackSong } from './appPlaybackGuards';
+import { resolveKugouMediaUrl } from '../services/onlineMusic/kugou/kugouMediaUrl';
 
 export { hasRenderableLyrics } from './lyrics/validity';
 
@@ -56,7 +57,10 @@ export const getAudioSrcKind = (audioSrc: string | null): 'empty' | 'blob' | 'ht
     return 'other';
 };
 
-export const toSafeRemoteUrl = (url: string | null | undefined): string | null | undefined => {
+export const toSafeRemoteUrl = (
+    url: string | null | undefined,
+    transport: { preserveHttp?: boolean; useVercelRelay?: boolean; origin?: string } = {},
+): string | null | undefined => {
     if (!url) {
         return url;
     }
@@ -67,49 +71,24 @@ export const toSafeRemoteUrl = (url: string | null | undefined): string | null |
         return normalizedUrl.replace('http:', 'https:');
     }
 
-    try {
-        const parsedUrl = new URL(normalizedUrl);
-        if (
-            parsedUrl.protocol === 'http:' &&
-            parsedUrl.hostname.startsWith('fs.') &&
-            parsedUrl.hostname.endsWith('.kugou.com')
-        ) {
-            return normalizedUrl.replace(/^http:/, 'https:');
-        }
-    } catch {
-        return normalizedUrl;
-    }
-
-    return normalizedUrl;
+    return resolveKugouMediaUrl(normalizedUrl, transport) ?? normalizedUrl;
 };
 
-// Keeps KuGou's original HTTP media URL only in Electron; Web/PWA retains HTTPS normalization.
+// The playback transport preserves desktop HTTP sources and enables the platform's Vercel relay.
 export const toSafePlaybackUrl = (
     url: string | null | undefined,
-    isElectron = typeof window !== 'undefined' && Boolean(window.electron)
+    isElectron = typeof window !== 'undefined' && Boolean(window.electron),
+    useVercelRelay = typeof __BUILD_HOST__ !== 'undefined' && __BUILD_HOST__ === 'vercel',
 ): string | null | undefined => {
-    if (!url || !isElectron) {
-        return toSafeRemoteUrl(url);
-    }
-
-    const normalizedUrl = url.split(/,\s*(?=https?:\/\/)/i)[0]?.trim() || url;
-    try {
-        const parsedUrl = new URL(normalizedUrl);
-        if (
-            parsedUrl.protocol === 'http:' &&
-            parsedUrl.hostname.startsWith('fs.') &&
-            parsedUrl.hostname.endsWith('.kugou.com')
-        ) {
-            return normalizedUrl;
-        }
-    } catch {
-        return normalizedUrl;
-    }
-
-    return toSafeRemoteUrl(normalizedUrl);
+    return toSafeRemoteUrl(url, {
+        preserveHttp: isElectron,
+        useVercelRelay,
+        // Media elements expose absolute currentSrc values; metadata/cache keys need the same spelling.
+        origin: typeof window !== 'undefined' ? window.location?.origin : undefined,
+    });
 };
 
-// toSafePlaybackUrl only normalizes (http→https, drops trailing fallback URLs) and never filters the scheme;
+// toSafePlaybackUrl normalizes transport (including the Vercel audio relay) and never filters the scheme;
 // script schemes and blank strings are not audio sources. Shared by the loader and the prefetch resolver.
 const NON_MEDIA_URL_SCHEME = /^\s*(javascript|vbscript):/i;
 

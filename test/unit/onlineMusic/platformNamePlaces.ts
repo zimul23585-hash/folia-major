@@ -29,6 +29,8 @@ export interface PlatformNamePlace {
 }
 
 export const PLATFORM_NAME_PLACES: Record<string, PlatformNamePlace> = {
+    'api-ts/kugou-audio.ts': { n: { kugou: 1 }, kind: 'main', why: 'Vercel discovers this thin entry by path; delegates to server/kugou' },
+    'api/kugou-audio.js': { n: { kugou: 1 }, kind: 'main', why: 'generated copy of the fixed Vercel route entry' },
     'api-ts/lyric-proxy.ts': { n: { qq: 2, kugou: 1 }, kind: 'main', why: 'the hosts the lyric relay may reach' },
     'api-ts/qq.ts': { n: { qq: 10 }, kind: 'main', why: 'the serverless entry of the QQ backend; the host finds it by path' },
     'api/lyric-proxy.js': { n: { qq: 2, kugou: 1 }, kind: 'main', why: 'the built copy of api-ts/lyric-proxy.ts' },
@@ -110,7 +112,7 @@ export const PLATFORM_NAME_PLACES: Record<string, PlatformNamePlace> = {
     'src/types/localLibrary.ts': { n: { netease: 1, qq: 1, kugou: 1, spotify: 2 }, kind: 'doc' },
     'src/types/onlineMusic.ts': { n: { netease: 4, qq: 1, ytm: 5, spotify: 3 }, kind: 'list', why: 'the type of a platform id, and the platform that is active where none was chosen' },
     'src/utils/appPlaybackGuards.ts': { n: { netease: 1 }, kind: 'stored', why: 'the platform of a stored song that names none' },
-    'src/utils/appPlaybackHelpers.ts': { n: { kugou: 3 }, kind: 'stored', why: 'URL hosts' },
+    'src/utils/appPlaybackHelpers.ts': { n: { kugou: 2 }, kind: 'stored', why: 'delegates URL transport to the platform pure helper' },
     'src/utils/consoleLogBuffer.ts': { n: { kugou: 1 }, kind: 'doc' },
     'src/utils/coverUrl.ts': { n: { netease: 6, qq: 20, kugou: 14, bodian: 1 }, kind: 'question', why: 'how each platform\'s picture host is asked for a size; the code has only the URL to go by; raised by the upstream merge 2026-10-17' },
     'src/utils/fmQueue.ts': { n: { qq: 1 }, kind: 'doc' },
