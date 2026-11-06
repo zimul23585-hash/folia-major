@@ -1181,17 +1181,26 @@ export const kugouProvider: OnlineMusicProvider = {
             // What is said when no URL comes: the last /song/url answer without one (it carries KuGou's error
             // code), else the legacy endpoint's, else the first request that failed.
             let noUrlSeen: { status?: unknown; errorCode?: unknown } | undefined;
+            let sawUnavailableStatus = false;
             let firstFailure: unknown;
             // A request that ran out of time stops the remaining /song/url qualities and variants: they would wait
             // as long. The legacy endpoint is still asked once.
             let songUrlChainStopped = false;
 
             // Tries the preferred KuGou quality first and degrades until a playable URL is returned.
-            for (const candidateQuality of qualities) {
+            for (const candidate of [...qualities, 'collection' as const]) {
                 if (songUrlChainStopped) break;
+                const isCollection = candidate === 'collection';
+                // The Concept app's saved-track context can return standard audio after status 3.
+                if (isCollection && (sourceRef?.variant === 'cloud'
+                    || !sawUnavailableStatus || !hasKugouAuthenticatedSearchSession())) break;
+                const candidateQuality = isCollection ? 'standard' : candidate;
                 const requestVariants = sourceRef?.variant === 'cloud'
                     ? [{ name: 'cloud', operation: 'user_cloud_url' as const, params: {
                         hash, id: String(sourceRef.providerData?.fileId || ''),
+                    } }]
+                    : isCollection ? [{ name: 'collection', operation: 'song_url' as const, params: {
+                        hash, album_id: albumId, album_audio_id: albumAudioId, ppage_id: '356753938',
                     } }]
                     : [
                         { name: 'metadata', operation: 'song_url' as const, params: {
@@ -1241,20 +1250,24 @@ export const kugouProvider: OnlineMusicProvider = {
                                 ...(replayGain ? { replayGain } : {}),
                             };
                         }
-                        noUrlSeen = {
+                        const noUrl = {
                             status: valueOf(data, 'status') ?? valueOf(response, 'status'),
                             errorCode: valueOf(data, 'errcode', 'error_code') ?? valueOf(response, 'errcode', 'error_code'),
                         };
+                        if (!isCollection) {
+                            noUrlSeen = noUrl;
+                            sawUnavailableStatus ||= String(noUrl.status) === '3';
+                        }
                         console.warn('[KuGouProvider] playback:no-url', {
                             hash,
                             requestedQuality: quality,
                             candidateQuality,
                             requestVariant: requestVariant.name,
-                            ...noUrlSeen,
+                            ...noUrl,
                         });
                     } catch (error) {
                         // A sign-in that has ended is said at once: another quality would be refused the same way.
-                        if (error instanceof OnlineProviderError && error.code === 'auth-required') throw error;
+                        if (!isCollection && error instanceof OnlineProviderError && error.code === 'auth-required') throw error;
                         firstFailure ??= error;
                         console.warn('[KuGouProvider] playback:quality-failed', {
                             hash,
@@ -1263,6 +1276,8 @@ export const kugouProvider: OnlineMusicProvider = {
                             requestVariant: requestVariant.name,
                             ...errorFields(error),
                         });
+                        // A refusal specific to the saved-track context still leaves public playInfo available.
+                        if (isCollection) break;
                         // Asked to wait, or nowhere to ask (the local service is not loaded, the web build has no
                         // address): every other request would be answered the same, the legacy one too.
                         const said = describeKugouFailure('audio', error);

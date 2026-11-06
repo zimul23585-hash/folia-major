@@ -744,6 +744,24 @@ describe('kugouProvider', () => {
         });
     });
 
+    it('uses the saved-track context once when ordinary metadata requests return status 3', async () => {
+        const url = 'https://example.test/song.mp3';
+        requestMock.mockImplementation(async (_operation, params) => {
+            if (params.ppage_id === '356753938') return { status: 1, data: { play_url: url } };
+            return { status: params.album_audio_id ? 3 : 0 };
+        });
+        const song = normalizeKugouSong({ FileHash: 'hash', SongName: 'Song', album_audio_id: 481559259 });
+
+        const source = await kugouProvider.playback!.getAudioSource(song, 'high');
+
+        expect(requestMock).toHaveBeenCalledTimes(5);
+        expect(requestMock).toHaveBeenLastCalledWith('song_url', {
+            hash: 'HASH', album_id: '', album_audio_id: '481559259', ppage_id: '356753938',
+        });
+        expect(legacyPlayInfoMock).not.toHaveBeenCalled();
+        expect(source).toMatchObject({ url, quality: 'standard' });
+    });
+
     it('uses the legacy mobile playInfo URL when all /song/url variants fail', async () => {
         requestMock.mockResolvedValue({ status: 3 });
         legacyPlayInfoMock.mockResolvedValue({
@@ -816,7 +834,7 @@ describe('kugouProvider', () => {
 
             const error = await kugouProvider.playback!.getAudioSource(metadataSong(), 'high').catch(caught => caught);
 
-            expect(requestMock).toHaveBeenCalledTimes(4);
+            expect(requestMock).toHaveBeenCalledTimes(5);
             expect(legacyPlayInfoMock).toHaveBeenCalledTimes(1);
             // errcode 0 is KuGou saying no error: the status is the code quoted.
             expect(kugouProvider.describeFailure?.('audio', error)).toEqual({ case: 'no-audio', code: '3' });
@@ -829,6 +847,7 @@ describe('kugouProvider', () => {
 
             const error = await kugouProvider.playback!.getAudioSource(plainSong(), 'standard').catch(caught => caught);
 
+            expect(requestMock).toHaveBeenCalledTimes(1);
             expect(kugouProvider.describeFailure?.('audio', error)).toEqual({ case: 'no-audio', code: '3', likelyCause: 'sign-in' });
         });
 
@@ -848,7 +867,7 @@ describe('kugouProvider', () => {
             legacyPlayInfoMock.mockResolvedValue({ status: 3 });
 
             await expect(kugouProvider.playback!.getAudioSource(plainSong(), 'lossless')).rejects.toMatchObject({ code: 'not-playable' });
-            expect(requestMock).toHaveBeenCalledTimes(3);
+            expect(requestMock).toHaveBeenCalledTimes(4);
         });
 
         it('stops asking /song/url after a request ran out of time, and still asks the legacy endpoint once', async () => {
@@ -872,6 +891,20 @@ describe('kugouProvider', () => {
             await expect(kugouProvider.playback!.getAudioSource(metadataSong(), 'hires')).rejects.toBe(error);
             expect(requestMock).toHaveBeenCalledTimes(1);
             expect(legacyPlayInfoMock).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['requires login', authError],
+            ['asks to wait', () => new OnlineProviderError('network', 'KuGouMusicApi request failed: 429', 'kugou', undefined, 429, 25_000)],
+        ])('still tries legacy playInfo when only the saved-track request %s', async (_label, thrown) => {
+            requestMock.mockResolvedValueOnce({ status: 3 }).mockRejectedValueOnce(thrown());
+            legacyPlayInfoMock.mockResolvedValue({ status: 1, url: 'https://legacy.example.test/song.mp3' });
+
+            const source = await kugouProvider.playback!.getAudioSource(plainSong(), 'standard');
+
+            expect(requestMock).toHaveBeenCalledTimes(2);
+            expect(legacyPlayInfoMock).toHaveBeenCalledWith('HASH');
+            expect(source?.url).toBe('https://legacy.example.test/song.mp3');
         });
 
         it('returns a lower quality after the preferred one comes back empty', async () => {
