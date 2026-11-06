@@ -5,12 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const requestMock = vi.hoisted(() => vi.fn());
 const anonymousSearchMock = vi.hoisted(() => vi.fn());
 const legacyPlayInfoMock = vi.hoisted(() => vi.fn());
-const transportState = vi.hoisted(() => ({ hasAuthenticatedSearchSession: true }));
+const transportState = vi.hoisted(() => ({ hasAuthenticatedSearchSession: true, hasPlaybackSession: true }));
 
 vi.mock('@/services/onlineMusic/kugou/kugouTransport', async importOriginal => ({
     ...await importOriginal<typeof import('@/services/onlineMusic/kugou/kugouTransport')>(),
     getKugouTransportAvailability: () => ({ configured: false, reason: 'not-configured' }),
     hasKugouAuthenticatedSearchSession: () => transportState.hasAuthenticatedSearchSession,
+    hasKugouPlaybackSession: () => transportState.hasPlaybackSession,
     requestKugouAnonymousSearch: anonymousSearchMock,
     requestKugou: requestMock,
     requestKugouLegacyPlayInfo: legacyPlayInfoMock,
@@ -87,6 +88,7 @@ describe('kugouProvider', () => {
         anonymousSearchMock.mockReset();
         legacyPlayInfoMock.mockReset();
         transportState.hasAuthenticatedSearchSession = true;
+        transportState.hasPlaybackSession = true;
     });
 
     it('uses anonymous signed search when no authenticated KuGou session exists', async () => {
@@ -841,7 +843,7 @@ describe('kugouProvider', () => {
         });
 
         it('says signing in may help when no URL came and no account is signed in, also past a legacy HTTP error', async () => {
-            transportState.hasAuthenticatedSearchSession = false;
+            transportState.hasPlaybackSession = false;
             requestMock.mockResolvedValue({ status: 3 });
             legacyPlayInfoMock.mockRejectedValue(new OnlineProviderError('network', 'KuGou legacy playInfo failed: 403', 'kugou', undefined, 403));
 
@@ -852,7 +854,7 @@ describe('kugouProvider', () => {
         });
 
         it('throws the first request that failed where no answer came, without a sign-in hint', async () => {
-            transportState.hasAuthenticatedSearchSession = false;
+            transportState.hasPlaybackSession = false;
             const first = networkError();
             requestMock.mockRejectedValueOnce(first).mockRejectedValue(networkError());
             legacyPlayInfoMock.mockRejectedValue(networkError());

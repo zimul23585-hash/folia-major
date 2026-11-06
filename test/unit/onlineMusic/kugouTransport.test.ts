@@ -64,6 +64,37 @@ describe('KuGou Web transport', () => {
         );
     });
 
+    it('uses the saved-track playback context after QR login without a device id', async () => {
+        vi.stubGlobal('window', undefined);
+        const audioUrl = 'https://example.test/song.mp3';
+        const fetchMock = vi.fn(async (input: string) => {
+            const url = new URL(input, 'https://folia.example.test');
+            if (url.pathname === '/login/qr/check') {
+                return Response.json({ data: { status: 4, token: 'web-token', userid: '9' } });
+            }
+            if (url.pathname === '/song/url') {
+                return Response.json(url.searchParams.get('ppage_id') === '356753938'
+                    ? { status: 1, url: [audioUrl] }
+                    : { status: 3 });
+            }
+            if (url.pathname === '/api/lyric-proxy') return Response.json({ status: 0 });
+            throw new Error(`Unexpected request for ${url.pathname}`);
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const { hasKugouAuthenticatedSearchSession, requestKugou } = await import('@/services/onlineMusic/kugou/kugouTransport');
+        const { kugouProvider, normalizeKugouSong } = await import('@/services/onlineMusic/kugou/kugouProvider');
+
+        await requestKugou('login_qr_check', { key: 'qr' });
+        expect(hasKugouAuthenticatedSearchSession()).toBe(false);
+        const song = normalizeKugouSong({ FileHash: 'hash', SongName: 'Song', album_audio_id: 481559259 });
+        await expect(kugouProvider.playback!.getAudioSource(song, 'standard')).resolves.toMatchObject({ url: audioUrl });
+
+        const savedTrackRequest = new URL(fetchMock.mock.lastCall![0]);
+        expect(savedTrackRequest.searchParams.get('ppage_id')).toBe('356753938');
+        expect(savedTrackRequest.searchParams.get('cookie')).toBe('token=web-token;userid=9');
+        expect(savedTrackRequest.searchParams.has('quality')).toBe(false);
+    });
+
     it('registers a fresh dfid and retries when an audio URL request requires verification', async () => {
         vi.stubGlobal('window', undefined);
         const { requestKugou } = await import('@/services/onlineMusic/kugou/kugouTransport');

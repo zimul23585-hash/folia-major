@@ -29,6 +29,7 @@ import i18n from '../../../i18n/config';
 import {
     getKugouTransportAvailability,
     hasKugouAuthenticatedSearchSession,
+    hasKugouPlaybackSession,
     requestKugouAnonymousSearch,
     requestKugou,
     requestKugouLegacyPlayInfo,
@@ -1193,7 +1194,7 @@ export const kugouProvider: OnlineMusicProvider = {
                 const isCollection = candidate === 'collection';
                 // The Concept app's saved-track context can return standard audio after status 3.
                 if (isCollection && (sourceRef?.variant === 'cloud'
-                    || !sawUnavailableStatus || !hasKugouAuthenticatedSearchSession())) break;
+                    || !sawUnavailableStatus || !hasKugouPlaybackSession())) break;
                 const candidateQuality = isCollection ? 'standard' : candidate;
                 const requestVariants = sourceRef?.variant === 'cloud'
                     ? [{ name: 'cloud', operation: 'user_cloud_url' as const, params: {
@@ -1328,7 +1329,7 @@ export const kugouProvider: OnlineMusicProvider = {
             }
 
             console.warn('[KuGouProvider] playback:unavailable', { hash, requestedQuality: quality, attemptedQualities: qualities });
-            if (noUrlSeen || firstFailure === undefined) throw kugouNoUrlError(noUrlSeen, !hasKugouAuthenticatedSearchSession());
+            if (noUrlSeen || firstFailure === undefined) throw kugouNoUrlError(noUrlSeen, !hasKugouPlaybackSession());
             throw firstFailure;
         },
     },

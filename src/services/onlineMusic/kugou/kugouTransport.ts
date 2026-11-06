@@ -234,17 +234,22 @@ const getWebSessionCookie = (): string => {
     return Array.from(values, ([key, value]) => `${key}=${value}`).join(';');
 };
 
-export const hasKugouAuthenticatedSearchSession = (): boolean => {
+const hasKugouSessionFields = (webFields: readonly string[]): boolean => {
     // Electron keeps the reusable token/dfid in the encrypted main-process bridge. The account id
-    // is only a non-secret hint that lets this synchronous selector choose authenticated search.
+    // is the non-secret hint the renderer can use to recognize a signed-in session.
     if (typeof window !== 'undefined' && window.electron?.kugouRequest) {
         return Boolean(readProviderSessionValue('kugou', 'userid'));
     }
     const cookie = getWebSessionCookie();
-    return ['token', 'userid', 'dfid'].every(key => (
+    return webFields.every(key => (
         new RegExp(`(?:^|;)\\s*${key}=[^;]+`, 'i').test(cookie)
     ));
 };
+
+export const hasKugouAuthenticatedSearchSession = (): boolean => hasKugouSessionFields(['token', 'userid', 'dfid']);
+
+// QR confirmation can supply token and userid before the service assigns a device id.
+export const hasKugouPlaybackSession = (): boolean => hasKugouSessionFields(['token', 'userid']);
 
 // Reproduces KuGou's anonymous Android search signature used before account-backed provider search.
 export const requestKugouAnonymousSearch = async (
